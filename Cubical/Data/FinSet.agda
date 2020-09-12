@@ -15,6 +15,7 @@ module Cubical.Data.FinSet where
 
 open import Cubical.Foundations.Prelude
 open import Cubical.Foundations.Logic
+open import Cubical.Foundations.HLevels
 open import Cubical.Foundations.Function
 open import Cubical.Foundations.Structure
 open import Cubical.Foundations.Isomorphism
@@ -25,10 +26,11 @@ open import Cubical.Data.Unit
 open import Cubical.Data.Nat
 open import Cubical.Data.Fin
 open import Cubical.Data.Sigma
+open import Cubical.Relation.Nullary
 
 private
   variable
-    ℓ : Level
+    ℓ ℓ₁ ℓ₂ : Level
     A : Type ℓ
 
 isFinSet : Type ℓ → Type ℓ
@@ -103,3 +105,60 @@ FinSet≡FinSetΣ = ua (isoToEquiv (iso to from to-from from-to))
 
 card : FinSet {ℓ} → ℕ
 card = fst ∘ snd ∘ transport FinSet≡FinSetΣ
+
+fin-transport
+  : ((A , n , _) : FinSetΣ {ℓ₁})
+  → (P : Type ℓ₁ → Type ℓ₂)
+  → isProp (P A)
+  → P (Lift (Fin n))
+  → P A
+fin-transport (A , n , eq) P isProp-P P-LiftFin =
+  rec
+    isProp-P
+    (λ x → x)
+    (∥P-A∥ eq)
+  where
+    ∥P-A∥ : ∥ A ≃ Fin n ∥ → ∥ P A ∥
+    ∥P-A∥ ∣ A≃Fin ∣ = ∣ transport (cong P LiftFin≡A) P-LiftFin ∣
+      where
+        LiftFin≡A : Lift (Fin n) ≡ A
+        LiftFin≡A = ua
+          ( Lift (Fin n) ≃⟨ invEquiv LiftEquiv ⟩
+            Fin n ≃⟨ invEquiv A≃Fin ⟩
+            A ■
+          )
+    ∥P-A∥ (squash x y i) = squash (∥P-A∥ x) (∥P-A∥ y) i
+
+isFinSet→isSet : isFinSet A → isSet A
+isFinSet→isSet {A = A} isFS-A =
+  fin-transport
+    (transport FinSet≡FinSetΣ (A , isFS-A))
+    isSet
+    isPropIsSet
+    isSetLiftFin
+  where
+    isSetLiftFin : ∀ {n} → isSet (Lift (Fin n))
+    isSetLiftFin (lift x) (lift y) p q = p≡q
+      where
+        p′ q′ : x ≡ y
+        p′ i = lower (p i)
+        q′ i = lower (q i)
+        p′≡q′ : p′ ≡ q′
+        p′≡q′ = isSetFin _ _ _ _
+        p≡q : p ≡ q
+        p≡q i j = lift (p′≡q′ i j)
+
+isFinSet→Discrete : isFinSet A → Discrete A
+isFinSet→Discrete {A = A} isFS-A =
+  fin-transport
+    (transport FinSet≡FinSetΣ (A , isFS-A))
+    Discrete
+    (isPropΠ λ x → isPropΠ λ y → isPropDec (isFinSet→isSet isFS-A x y))
+    DiscriteLiftFin
+  where
+    DiscriteLiftFin : ∀ {n} → Discrete (Lift (Fin n))
+    DiscriteLiftFin (lift x) (lift y) =
+      mapDec
+        liftExt
+        (λ ¬p p → ¬p (cong lower p))
+        (discreteFin x y)
